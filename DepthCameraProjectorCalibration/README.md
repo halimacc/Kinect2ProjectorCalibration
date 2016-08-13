@@ -1,5 +1,5 @@
 Calibrate Kinect2 Depth Camera and Projector
-===============================
+============================================
 This is a Processing program used to **calibrate Kinect2 depth camera and projector**. It is modifyed from the calibration example of [KinectProjectorToolkit](https://github.com/genekogan/KinectProjectorToolkit).
 
 System Requirement
@@ -21,7 +21,7 @@ Basiclly follow the [tutorial video](https://vimeo.com/84658886) provided by ori
 
 	1. `ProjectorScreenId`: the idendity number of projector screen (mostly 1 or 2)
 	2. `pWidth` and `pHeight`: size of projector screen
-	3. `DepthCameraParams`: intrinsics of your kinect2 depth camera, you can calibrate it yourself or you can get it by using the [CameraIntrinsicsTool](./../CameraIntrinsicsTool).
+	3. `DepthCameraParams`: intrinsics of your Kinect2 depth camera, you can calibrate it yourself or you can get it by using the [CameraIntrinsicsTool](./../CameraIntrinsicsTool).
 
 - Get 3 or more boards for each board position you choose. this can reduce the impact of Kinect depth image shake.
 
