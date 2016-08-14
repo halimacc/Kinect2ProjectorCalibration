@@ -10,8 +10,9 @@ System Requirement
 Installation
 ------------
 1. Install [Processing 3](https://processing.org/).
-2. Open Processing, selecting "Add Library..." from the "Import Library..." submenu within the Sketch menu, search and install `Kinect Projector Toolkit`, `ControlP5`, `OpenCV for processing`, and `Kinect v2 for Processing`.
-3. Clone this repository to your computer, and open this directory with Processing.
+2. Open Processing, selecting "Add Library..." from the "Import Library..." submenu within the Sketch menu, search and install `ControlP5`, `OpenCV for processing`, and `Kinect v2 for Processing`.
+3. Clone [KinectProjectorToolkit](https://github.com/genekogan/KinectProjectorToolkit) into your Processing library folder (usually Document->Processing->library).
+4. Clone this repository to your computer, and open it with Processing.
 
 Calibration
 -----------
