@@ -58,7 +58,7 @@ PVector covertDepthToCamera(int x, int y, float depthValue) {
   PVector point = new PVector();
   point.z = (depthValue);// / (1.0f); // Convert from mm to meters
   point.x = (x - DepthCameraParams.cx) * point.z / DepthCameraParams.fx;
-  point.y = (y - DepthCameraParams.cy) * point.z / DepthCameraParams.fy;
+  point.y = (DepthCameraParams.cy - y) * point.z / DepthCameraParams.fy;
   return point;
 }
 
