@@ -26,3 +26,34 @@ Basiclly follow the [tutorial video](https://vimeo.com/84658886) provided by ori
 
 - Get 3 or more boards for each board position you choose. this can reduce the impact of Kinect depth image shake.
 
+Usage of Calibrated data
+------------------------
+
+if you want to fully understand the usage of calibration data, refer to [this blog](http://blog.3dsense.org/programming/kinect-projector-calibration-human-mapping-2/). 
+
+- Depth Space → Camera Space
+	
+	**Note**: before coordinate transformation, you have to mirror Kinect depth image.
+
+        Point depth2camera(int w, int h, float depth) {
+			Point point;
+	    	point.z = depth;
+			point.x = (x - CameraParams.cx) * point.z / CameraParams.fx;
+			point.y = (CameraParams.cy - y) * point.z / CameraParams.fy;
+			return point;
+    	}
+
+- Camera Space → Projector Space
+	
+	**note**: `t0` to `t10` is the 11 float numbers in calibration file, and project space here is in same coordinate with viewport space.
+		
+		Point camera2projector(Point cp) {
+			Point point;
+			point.z = 0;
+			float denom = t8 * cp.x + t9 * cp.y + t10 * cp.z + 1;
+			point.x = 2 * (t0 * cp.x + t1 * cp.y + t2 * cp.z + t3) / denom - 1;
+			point.y = 1 - 2 * (t4 * cp.x + t5 * cp.y + t6 * cp.z + t7) / denom;
+			return point;
+		}
+
+ 
