@@ -4,9 +4,9 @@
 // and name of your calibration file-to-be
 
 // projector size
-int projectorScreenId = 2;
-int pWidth = 1024;
-int pHeight = 768;
+int projectorScreenId = 1;
+int pWidth = 1280;
+int pHeight = 1024;
 
 //camera information based on the Kinect v2 hardware
 // you can get it from libfreenect2 program or calibrate it yourself
@@ -109,13 +109,44 @@ void draw()
     for (int x = 0; x < depthWidth; x++) {
       //incoming pixels 512 x 424 with position in 1920 x 1080
       int idx = y * depthWidth  + x;
+      float cx = mapDTC[2 * idx + 0];
+      float cy = mapDTC[2 * idx + 1];
+      
+      // cubic
+      //if (cx > 1 && cx < colorWidth -2 && cy > 1 && cy < colorHeight -2) {
+      //  int v = 0;
+      //  for (int j = 0; j < 3; ++j) {
+      //    v += cubic(colorImg.pixels, cx, cy, colorWidth, 0xff << (j * 8));
+      //  }
+      //  v |= 0xff000000;
+      //  registeredDepthImg.pixels[idx] = v;
+      //}
 
-      int  valXColor = (int)(mapDTC[2 * idx + 0]);
-      int  valYColor = (int)(mapDTC[2 * idx + 1]);
-
-      if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
-        registeredDepthImg.pixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+      // linear interpolation
+      if (cx > 0 && cx < colorWidth - 1 && cy > 0 && cy < colorHeight -1) {
+        int v = 0;
+        for (int j = 0; j < 3; ++j) {
+          int mask = 0xff << (j * 8);
+          int vlu = colorImg.pixels[(int)cy * colorWidth + (int)cx] & mask;
+          int vru = colorImg.pixels[(int)cy * colorWidth + (int)cx + 1] & mask;
+          int vrd = colorImg.pixels[(int)(cy + 1) * colorWidth + (int)cx + 1] & mask;
+          int vld = colorImg.pixels[(int)(cy + 1) * colorWidth + (int)cx] & mask;
+          v += (int)(((int)cx + 1 - cx) * ((int)cy + 1 - cy) * vlu
+            + (cx - (int)cx) * ((int)cy + 1 - cy) * vru
+            + (cx - (int)cx) * (cy - (int)cy) * vrd
+            +((int)cx + 1 - cx) * (cy - (int)cy) * vld) & mask;
+        }
+        v |= 0xff000000;
+        registeredDepthImg.pixels[idx] = v;
       }
+
+      // origin method
+      //int  valXColor = (int)(mapDTC[2 * idx + 0]);
+      //int  valYColor = (int)(mapDTC[2 * idx + 1]);
+
+      //if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
+      //  registeredDepthImg.pixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+      //}
     }
   }
   mirrorPixels(registeredDepthImg.pixels, depthWidth, depthHeight);
