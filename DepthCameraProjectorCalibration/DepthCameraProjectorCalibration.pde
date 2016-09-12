@@ -44,7 +44,7 @@ PImage registeredImg;
 int[] zeroPixels;
 
 int frame;
-int cacheLen = 61;
+int cacheLen = 1;
 ArrayList<int[]> frameCache;
 int[][] frameSum;
 ArrayList<int[]> depthCache;
@@ -81,8 +81,10 @@ void setup()
   frameSum = new int[depthWidth * depthHeight][3];
   depthSum = new int[depthWidth * depthHeight];
   depthRaw = new int[depthWidth * depthHeight];
+  zeroPixels = new int[depthWidth * depthHeight];
   for (int i = 0; i < depthWidth * depthHeight; i++) {
     depthSum[i] = 0;
+    zeroPixels[i] = 0;
     for (int j = 0; j < 3; ++j)
       frameSum[i][j] = 0;
   }
@@ -93,8 +95,6 @@ void setup()
     frameCache.add(new int[depthWidth * depthHeight]);
     depthCache.add(null);
   }
-  
-  
 
   // set up kinect
   kinect = new KinectPV2(this);
@@ -114,25 +114,25 @@ void setup()
 void draw() 
 { 
   frame++;
-  int[] cache = frameCache.get(frame % cacheLen);
-  int[] cacheOld = frameCache.get((frame + 1) % cacheLen);
   
-  int[] dCache = kinect.getRawDepthData(); 
-  depthCache.set(frame % cacheLen, dCache);
-  int[] dCacheOld = depthCache.get((frame + 1) % cacheLen);
+  int[] depthRawData = kinect.getRawDepthData();
+  int[] dCache = depthCache.get(frame % cacheLen);
   for (int i = 0; i < depthWidth * depthHeight; ++i) {
-    depthSum[i] += dCache[i];
-    if (frame >= cacheLen - 1) {
-      depthSum[i] -= dCacheOld[i];
+    if (frame >= cacheLen) {
+      depthSum[i] -= dCache[i];
     }
-    depthRaw[i] = (int)(depthSum[i] / (cacheLen - 1));
+    depthSum[i] += depthRawData[i];
+    depthRaw[i] = (int)(depthSum[i] / cacheLen);
   }
+  depthCache.set(frame % cacheLen, depthRawData);
+  
   mirrorPixels(depthRaw, depthWidth, depthHeight);
   
   // get mirror registered depth image
+  int[] rPixels = new int[depthWidth * depthHeight];
+  PApplet.arrayCopy(zeroPixels, rPixels);
   float[] mapDTC = kinect.getMapDepthToColor();
   PImage colorImg = kinect.getColorImage();
-  
   // mapping color pixels to depth pixels
   colorImg.loadPixels();
   for (int y = 0; y < depthHeight; y++) {
@@ -140,46 +140,32 @@ void draw()
       //incoming pixels 512 x 424 with position in 1920 x 1080
       int idx = y * depthWidth  + x;
       
-      // interpolation
-      //float cx = mapDTC[2 * idx + 0];
-      //float cy = mapDTC[2 * idx + 1];
-      //if (cx > 1 && cx < colorWidth - 2 && cy > 1 && cy < colorHeight - 2) {
-      //  int lux = (int)cx;
-      //  int luy = (int)cy;
-        
-      //  for (int mask = 0xff; mask < 0x1000000; mask *= 0x100) {
-      //    cache[idx] += ((int)((lux + 1 - cx) * (luy + 1 - cy) * (colorImg.pixels[luy * colorWidth + lux] & mask)) & mask)
-      //      + ((int)((cx - lux) * (luy + 1 - cy) * (colorImg.pixels[luy * colorWidth + lux + 1] & mask)) & mask)
-      //      + ((int)((cx - lux) * (cy - luy) * (colorImg.pixels[(luy + 1) * colorWidth + lux + 1] & mask)) & mask)
-      //      + ((int)((lux + 1 - cx) * (cy - luy) * (colorImg.pixels[(luy + 1) * colorWidth + lux] & mask)) & mask);
-      //  }
-      //}
-      
       int  valXColor = (int)(mapDTC[2 * idx + 0]);
       int  valYColor = (int)(mapDTC[2 * idx + 1]);
 
       if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
-        cache[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+        rPixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
       }
     }
   }
   
   // update frame sum and registerd image
+  int[] cache = frameCache.get(frame % cacheLen);
   registeredImg.loadPixels();
   for (int i = 0; i < depthWidth * depthHeight; ++i) {
     registeredImg.pixels[i] = 0;
     for (int j = 0; j < 3; ++j) {
       int mask = 0xff << (j * 8);
-      frameSum[i][j] += cache[i] & mask;
-      if (frame >= cacheLen - 1) {
-        frameSum[i][j] -= (cacheOld[i] & mask);
+      if (frame >= cacheLen) {
+        frameSum[i][j] -= (cache[i] & mask);
       }
-      registeredImg.pixels[i] += (int)(frameSum[i][j] / (cacheLen - 1)) & mask;
+      frameSum[i][j] += rPixels[i] & mask;
+      registeredImg.pixels[i] += (int)(frameSum[i][j] / cacheLen ) & mask;
     }
-    cacheOld[i] = 0;
+    cache[i] = rPixels[i];
     registeredImg.pixels[i] |= 0xff000000;
   }
-    
+  
   mirrorPixels(registeredImg.pixels, depthWidth, depthHeight);
   registeredImg.updatePixels();
 
