@@ -44,7 +44,7 @@ PImage registeredImg;
 int[] zeroPixels;
 
 int frame;
-int cacheLen = 1;
+int cacheLen = 60;
 ArrayList<int[]> frameCache;
 int[][] frameSum;
 ArrayList<int[]> depthCache;
@@ -140,12 +140,33 @@ void draw()
       //incoming pixels 512 x 424 with position in 1920 x 1080
       int idx = y * depthWidth  + x;
       
-      int  valXColor = (int)(mapDTC[2 * idx + 0]);
-      int  valYColor = (int)(mapDTC[2 * idx + 1]);
+      float cx = mapDTC[2 * idx + 0];
+      float cy = mapDTC[2 * idx + 1];
 
-      if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
-        rPixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+      // linear interpolation
+      if (cx > 0 && cx < colorWidth - 1 && cy > 0 && cy < colorHeight -1) {
+        int v = 0;
+        for (int j = 0; j < 3; ++j) {
+          int mask = 0xff << (j * 8);
+          int vlu = colorImg.pixels[(int)cy * colorWidth + (int)cx] & mask;
+          int vru = colorImg.pixels[(int)cy * colorWidth + (int)cx + 1] & mask;
+          int vrd = colorImg.pixels[(int)(cy + 1) * colorWidth + (int)cx + 1] & mask;
+          int vld = colorImg.pixels[(int)(cy + 1) * colorWidth + (int)cx] & mask;
+          v += (int)(((int)cx + 1 - cx) * ((int)cy + 1 - cy) * vlu
+            + (cx - (int)cx) * ((int)cy + 1 - cy) * vru
+            + (cx - (int)cx) * (cy - (int)cy) * vrd
+            +((int)cx + 1 - cx) * (cy - (int)cy) * vld) & mask;
+        }
+        v |= 0xff000000;
+        rPixels[idx] = v;
       }
+      
+      //int  valXColor = (int)(mapDTC[2 * idx + 0]);
+      //int  valYColor = (int)(mapDTC[2 * idx + 1]);
+
+      //if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
+      //  rPixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+      //}
     }
   }
   
