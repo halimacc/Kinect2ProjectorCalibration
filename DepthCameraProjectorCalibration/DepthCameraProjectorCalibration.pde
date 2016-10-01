@@ -14,7 +14,7 @@ static class DepthCameraParams {
   static float cx = 263.088196f;
   static float cy = 207.137207f;
   static float fx = 365.753296f;
-  static float fy = 365.753296;
+  static float fy = 365.753296f;
 }
 
 // calibration file-to-be
@@ -40,8 +40,15 @@ OpenCV opencv;
 ProjectorApplet pa;
 
 int[] depthRaw;
-PImage registeredDepthImg;
+PImage registeredImg;
 int[] zeroPixels;
+
+int frame;
+int cacheLen = 60;
+ArrayList<int[]> frameCache;
+int[][] frameSum;
+ArrayList<int[]> depthCache;
+int[] depthSum;
 
 ArrayList<PVector> foundPoints = new ArrayList<PVector>();
 ArrayList<PVector> projPoints = new ArrayList<PVector>();
@@ -68,12 +75,25 @@ void setup()
   opencv = new OpenCV(this, depthWidth, depthHeight);
  
   // initialize registered depth image
-  registeredDepthImg = createImage(depthWidth, depthHeight, PImage.RGB);
+  registeredImg = createImage(depthWidth, depthHeight, PImage.RGB);
+  
+  frame = -1;
+  frameSum = new int[depthWidth * depthHeight][3];
+  depthSum = new int[depthWidth * depthHeight];
+  depthRaw = new int[depthWidth * depthHeight];
   zeroPixels = new int[depthWidth * depthHeight];
-  for (int i = 0; i < KinectPV2.WIDTHDepth; i++) {
-    for (int j = 0; j < KinectPV2.HEIGHTDepth; j++) {
-      zeroPixels[i * depthHeight + j] = 0;
-    }
+  for (int i = 0; i < depthWidth * depthHeight; i++) {
+    depthSum[i] = 0;
+    zeroPixels[i] = 0;
+    for (int j = 0; j < 3; ++j)
+      frameSum[i][j] = 0;
+  }
+  
+  frameCache = new ArrayList<int[]>();
+  depthCache = new ArrayList<int[]>();
+  for (int i = 0; i < cacheLen; ++i) {
+    frameCache.add(new int[depthWidth * depthHeight]);
+    depthCache.add(null);
   }
 
   // set up kinect
@@ -93,36 +113,84 @@ void setup()
 
 void draw() 
 { 
-  // get mirrored depth raw data
-  depthRaw = kinect.getRawDepthData();
+  frame++;
+  
+  int[] depthRawData = kinect.getRawDepthData();
+  int[] dCache = depthCache.get(frame % cacheLen);
+  for (int i = 0; i < depthWidth * depthHeight; ++i) {
+    if (frame >= cacheLen) {
+      depthSum[i] -= dCache[i];
+    }
+    depthSum[i] += depthRawData[i];
+    depthRaw[i] = (int)(depthSum[i] / cacheLen);
+  }
+  depthCache.set(frame % cacheLen, depthRawData);
+  
   mirrorPixels(depthRaw, depthWidth, depthHeight);
   
   // get mirror registered depth image
+  int[] rPixels = new int[depthWidth * depthHeight];
+  PApplet.arrayCopy(zeroPixels, rPixels);
   float[] mapDTC = kinect.getMapDepthToColor();
   PImage colorImg = kinect.getColorImage();
-  
-  // Mapping color pixels to depth pixels
-  PApplet.arrayCopy(zeroPixels, registeredDepthImg.pixels);
+  // mapping color pixels to depth pixels
   colorImg.loadPixels();
-  registeredDepthImg.loadPixels();
   for (int y = 0; y < depthHeight; y++) {
     for (int x = 0; x < depthWidth; x++) {
       //incoming pixels 512 x 424 with position in 1920 x 1080
       int idx = y * depthWidth  + x;
+      
+      float cx = mapDTC[2 * idx + 0];
+      float cy = mapDTC[2 * idx + 1];
 
-      int  valXColor = (int)(mapDTC[2 * idx + 0]);
-      int  valYColor = (int)(mapDTC[2 * idx + 1]);
-
-      if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
-        registeredDepthImg.pixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+      // linear interpolation
+      if (cx > 0 && cx < colorWidth - 1 && cy > 0 && cy < colorHeight -1) {
+        int v = 0;
+        for (int j = 0; j < 3; ++j) {
+          int mask = 0xff << (j * 8);
+          int vlu = colorImg.pixels[(int)cy * colorWidth + (int)cx] & mask;
+          int vru = colorImg.pixels[(int)cy * colorWidth + (int)cx + 1] & mask;
+          int vrd = colorImg.pixels[(int)(cy + 1) * colorWidth + (int)cx + 1] & mask;
+          int vld = colorImg.pixels[(int)(cy + 1) * colorWidth + (int)cx] & mask;
+          v += (int)(((int)cx + 1 - cx) * ((int)cy + 1 - cy) * vlu
+            + (cx - (int)cx) * ((int)cy + 1 - cy) * vru
+            + (cx - (int)cx) * (cy - (int)cy) * vrd
+            +((int)cx + 1 - cx) * (cy - (int)cy) * vld) & mask;
+        }
+        v |= 0xff000000;
+        rPixels[idx] = v;
       }
+      
+      //int  valXColor = (int)(mapDTC[2 * idx + 0]);
+      //int  valYColor = (int)(mapDTC[2 * idx + 1]);
+
+      //if (valXColor >= 0 && valXColor < colorWidth && valYColor >= 0 && valYColor < colorHeight) {
+      //  rPixels[idx] = colorImg.pixels[valYColor * colorWidth + valXColor];
+      //}
     }
   }
-  mirrorPixels(registeredDepthImg.pixels, depthWidth, depthHeight);
-  registeredDepthImg.updatePixels();
   
+  // update frame sum and registerd image
+  int[] cache = frameCache.get(frame % cacheLen);
+  registeredImg.loadPixels();
+  for (int i = 0; i < depthWidth * depthHeight; ++i) {
+    registeredImg.pixels[i] = 0;
+    for (int j = 0; j < 3; ++j) {
+      int mask = 0xff << (j * 8);
+      if (frame >= cacheLen) {
+        frameSum[i][j] -= (cache[i] & mask);
+      }
+      frameSum[i][j] += rPixels[i] & mask;
+      registeredImg.pixels[i] += (int)(frameSum[i][j] / cacheLen ) & mask;
+    }
+    cache[i] = rPixels[i];
+    registeredImg.pixels[i] |= 0xff000000;
+  }
+  
+  mirrorPixels(registeredImg.pixels, depthWidth, depthHeight);
+  registeredImg.updatePixels();
 
-  opencv.loadImage(registeredDepthImg);
+  opencv.loadImage(registeredImg);
   opencv.gray();
 
   if (isSearchingBoard)
@@ -140,7 +208,7 @@ void drawGui()
   translate(30, 120);
   textSize(22);
   fill(255);
-  image(registeredDepthImg, 0, 0);
+  image(registeredImg, 0, 0);
   
   // draw chessboard corners, if found
   if (isSearchingBoard) {
